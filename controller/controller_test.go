@@ -1,10 +1,12 @@
 package controller
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -154,37 +156,117 @@ func TestController_PutWalletByUsername(t *testing.T) {
 }
 
 func TestController_WalletHandler(t *testing.T) {
-	wallet := models.DataResponse{
-		"username1": models.Wallet{
+
+	t.Run("when all user wallets are listed ", func(t *testing.T) {
+		serviceReturn := &models.ServiceResponse{
+			"username1": models.Wallet{
+				Username: "username1",
+				Balance:  0,
+			}}
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		mockService := mock.NewMockIWallet(ctrl)
+
+		mockService.EXPECT().GetWallet().Return(serviceReturn, nil).Times(1)
+
+		controller := NewWalletController(mockService)
+
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		w := httptest.NewRecorder()
+		controller.WalletHandler(w, r)
+
+		actual := &models.ServiceResponse{}
+		json.Unmarshal(w.Body.Bytes(), actual)
+
+		assert.Equal(t, "application/json", w.Header().Get("content-type"))
+		assert.True(t, GetWallet.MatchString(r.URL.Path))
+		assert.Equal(t, serviceReturn, actual)
+		assert.Equal(t, w.Result().StatusCode, http.StatusOK)
+	})
+
+	t.Run("when a single user wallet is listed", func(t *testing.T) {
+		serviceReturn := &models.Wallet{
+			Username: "username",
+			Balance:  100,
+		}
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		mockService := mock.NewMockIWallet(ctrl)
+
+		mockService.EXPECT().GetWalletByUsername("username").Return(serviceReturn, nil).Times(1)
+
+		controller := NewWalletController(mockService)
+
+		r := httptest.NewRequest(http.MethodGet, "/username", nil)
+		w := httptest.NewRecorder()
+		controller.WalletHandler(w, r)
+
+		actual := &models.Wallet{}
+		json.Unmarshal(w.Body.Bytes(), actual)
+
+		assert.Equal(t, "application/json", w.Header().Get("content-type"))
+		assert.True(t, GetWalletByUsername.MatchString(r.URL.Path))
+		assert.Equal(t, serviceReturn, actual)
+		assert.Equal(t, w.Result().StatusCode, http.StatusOK)
+
+	})
+
+	t.Run("when new wallet is added", func(t *testing.T) {
+		serviceReturn := &models.Wallet{
 			Username: "username1",
-			Balance:  0,
-		},
-	}
+			Balance:  100,
+		}
 
-	data := database.NewDatabase(wallet)
-	svc := service.NewWalletService(data)
-	controller := NewWalletController(svc)
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		mockService := mock.NewMockIWallet(ctrl)
 
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	w := httptest.NewRecorder()
-	controller.WalletHandler(w, r)
-	assert.Equal(t, "application/json", w.Header().Get("content-type"))
-	assert.True(t, GetWallet.MatchString(r.URL.Path))
+		mockService.EXPECT().PutWalletByUsername("username").Return(serviceReturn, nil).Times(1)
 
-	r = httptest.NewRequest(http.MethodGet, "/username", nil)
-	w = httptest.NewRecorder()
-	controller.WalletHandler(w, r)
-	assert.True(t, GetWalletByUsername.MatchString(r.URL.Path))
+		controller := NewWalletController(mockService)
 
-	r = httptest.NewRequest(http.MethodPut, "/username", nil)
-	w = httptest.NewRecorder()
-	controller.WalletHandler(w, r)
-	assert.True(t, PutWalletByUsername.MatchString(r.URL.Path))
+		r := httptest.NewRequest(http.MethodPut, "/username", nil)
+		w := httptest.NewRecorder()
+		controller.WalletHandler(w, r)
 
-	r = httptest.NewRequest(http.MethodPost, "/username", nil)
-	w = httptest.NewRecorder()
-	controller.WalletHandler(w, r)
-	assert.True(t, PostWalletByUsername.MatchString(r.URL.Path))
+		actual := &models.Wallet{}
+		json.Unmarshal(w.Body.Bytes(), actual)
+
+		assert.Equal(t, "application/json", w.Header().Get("content-type"))
+		assert.True(t, PutWalletByUsername.MatchString(r.URL.Path))
+		assert.Equal(t, serviceReturn, actual)
+		assert.Equal(t, w.Result().StatusCode, http.StatusOK)
+	})
+
+	t.Run("when adding money", func(t *testing.T) {
+		serviceReturn := &models.Wallet{
+			Username: "username1",
+			Balance:  100,
+		}
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		mockService := mock.NewMockIWallet(ctrl)
+
+		mockService.EXPECT().PostWalletByUsername("username", float64(100)).Return(serviceReturn, nil).Times(1)
+
+		controller := NewWalletController(mockService)
+
+		r := httptest.NewRequest(http.MethodPost, "/username", nil)
+		w := httptest.NewRecorder()
+		r.Body = ioutil.NopCloser(bytes.NewBuffer([]byte("{\n    \"balance\" : 100\n}")))
+		controller.WalletHandler(w, r)
+
+		actual := &models.Wallet{}
+		json.Unmarshal(w.Body.Bytes(), actual)
+
+		assert.Equal(t, "application/json", w.Header().Get("content-type"))
+		assert.True(t, PostWalletByUsername.MatchString(r.URL.Path))
+		assert.Equal(t, serviceReturn, actual)
+		assert.Equal(t, w.Result().StatusCode, http.StatusOK)
+	})
 
 }
 
