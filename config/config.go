@@ -2,10 +2,8 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
-	"strings"
 )
 
 type IConfig interface {
@@ -19,21 +17,8 @@ type Config struct {
 
 var c = &Config{}
 
-func init() {
-
-	mydir, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf(mydir)
-
-	if strings.Contains(mydir, "service") {
-		os.Chdir("..")
-	} else if strings.Contains(mydir, "controller") {
-		os.Chdir("..")
-	}
-
-	file, err := os.Open(".config\\" + env + ".json")
+func (*Config) Get() *Config {
+	file, err := os.Open(".config/" + env + ".json")
 	if err != nil {
 		panic(err)
 	}
@@ -48,9 +33,7 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-}
 
-func (*Config) Get() *Config {
 	return c
 }
 
